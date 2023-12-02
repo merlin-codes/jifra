@@ -1,0 +1,10 @@
+name = "JiFraCLI"
+version = "1.0.0"
+group = "dev.levia.jifra"
+
+[support]
+maven = "https://repo1.maven.org/maven2/group/name/version/name-version.jar"
+
+[libs]
+
+[test-libs]
