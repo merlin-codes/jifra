@@ -10,9 +10,11 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
+import java.util.stream.Collectors;
 
 public class Project {
 	Map<String, Map<String, String>> map;
@@ -107,6 +109,7 @@ public class Project {
 		new File("target/META-INF").mkdirs();
 		new File("target/WEB-INF").mkdirs();
 		new File("target/WEB-INF/classes").mkdirs();
+		new File("target/WEB-INF/lib").mkdirs();
 		try {
 			this.makeMetaMF();
 			Files.write(Paths.get("target/WEB-INF/web.xml"), sb.toString().getBytes());
@@ -115,6 +118,10 @@ public class Project {
 			this.compile("target/WEB-INF/classes");
 			Files.write(Paths.get("target/index.html"), ("<!DOCTYPE html><html><head><title>"+name+"</title></head><body><h1>Hello World!</h1></body></html>").getBytes());
 			if (new File("template").exists()) Files.copy(Paths.get("template"), Paths.get("target"));
+
+			for (String s: new File("libs").list()) { 
+				Files.copy(Paths.get("libs/"+s), Paths.get("target/WEB-INF/lib/"+s)); 
+			}
 		} catch (Exception e) { this.errOut(e, "Failed to compile web app"); }
 		System.out.println("Done making war file");
 	}
@@ -232,17 +239,21 @@ public class Project {
 		this.makeMetaMF();
 		try {
 			var sources = this.getJavaFiles("src", new File("src").list());
+			var libs_e = (new File("libs")).list();
+			var libs = "";
 			var sources_files = new BufferedWriter(new FileWriter("src/sources.txt"));
 			sources_files.write(sources);
 			sources_files.close();
 
-			var build = runtime.exec(("javac -d "+to+" @src/sources.txt").split(" "));
+			var build_sup = "javac ";
+			if (libs_e != null) 
+				build_sup +="-cp "+Arrays.stream(libs_e).map(i -> "libs/"+i).collect(Collectors.joining(","))+" ";
+			System.out.println(build_sup+"-d "+to+" @src/sources.txt");
+			var build = runtime.exec((build_sup+"-d "+to+" @src/sources.txt").split(" "));
 
 			build.waitFor();
 			if (deleteSrc) this.deleteIfEndsWith(".", (new File(".")).list(), ".class", to);
 			this.printProcessError(build);
-
-			MavenStealer.deleteDir("src");
 		} catch (Exception e) { this.errOut(e, "Failed to compile project"); }
 	}
 	void deleteIfEndsWith(String index, String[] list, String endsWith, String ignore) {

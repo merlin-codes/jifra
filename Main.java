@@ -42,6 +42,7 @@ public class Main {
 		} else if (args[0].contains("war")) { 
 			project.structure(true); 
 			project.compile("target"); 
+			project.installDeps();
 			project.makeDotEnv(); 
 			project.compileWeb(); 
 			project.makeWar(); 
