@@ -4,12 +4,25 @@ Basic Java Project Manager CLI
 
 ## Commands
 ```js
-jifra [command]
-    init: initialize a new project (in current folder)
-    run:  run the project compiles project and runs it
-    clean: clean maded directories of tool (removes generated files)
-    jar:   compiles && build a jar 
-    war:   compiles && build a war
+commands: 
+	init [name]		- initialize project 
+	clean			- clean project 
+	install			- install all dependencies 
+	run			- run program 
+	help			- this help 
+	jar			- make jar 
+	war			- make war
+
+chaining commands: 
+	[command] -<flags>
+	n - clean (new)
+	i - install
+	c - compile
+	r - run
+	j - make jar
+	w - make war
+	e - make .env
+	s - save jar
 ```
 
 ## Basic project structure
@@ -18,23 +31,31 @@ root
 ├── app.toml
 ├── Main.java
 ├── libs/
+├── local-libs/
 └── test-libs/
 ```
 
 ### Configuration of Project
 - app.toml
-```
-name = "project"
-group = "com.example"
+```toml
+name = "Project"
+group = "com.example.project"
 version = "0.0.1"
 
 [libs]
+# artifact = "groupId:version" or "groupId"
+
+[local]
+# name-jar = /path/to/name.jar
+
 [test-libs]
+# artifact = "groupId:version" or "groupId"
 ```
 
 ### WebApps 
 not fully implemented but slight support. Running war will then generated war file.
-- needs file web.toml
+- require file web.toml
+- used file can be used with TomCat10 (JakartaEE) 
 ```toml
 # not fully supported
 # [filter.SimpleFilter]
@@ -44,8 +65,9 @@ not fully implemented but slight support. Running war will then generated war fi
 
 [servlet]
 # subpackage : urls : on_load
-# UserServlet = "user.UserServlet:/user:0"
-# HomeServlet = "home.HomeServlet:/:/home"
+# 0 is false
+UserServlet = "user.UserServlet:/user:0"
+HomeServlet = "home.HomeServlet:/:/home"
 ```
 
 
