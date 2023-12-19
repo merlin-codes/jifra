@@ -1,18 +1,4 @@
-import java.util.Map;
-import java.util.Random;
-import java.util.HashMap;
-import java.util.Scanner;
-import java.io.*;
-import java.net.URL;
-import java.net.URISyntaxException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.net.URI;
-import java.nio.file.StandardCopyOption;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-
+import java.io.File;
 
 public class Main {
 	public static void main(String[] args) {
@@ -20,39 +6,87 @@ public class Main {
 
 		if (args.length == 0 || args[0].equals("help")) {
 			project.help();
-		} else if (args[0].contains("install")) {
-			project.installDeps();
-		} else if (args[0].contains("run")) { 
+			return;
+		} 
+		StrEq str = new StrEq(args);
+		if (str.contains("install")) project.installDeps();
+
+		if (str.contains("-")) {
+			if (str.contains("n")) {
+				project.clean();
+				project.cleanAfter();
+			}
+			if (str.contains("i")) project.installDeps();
+			if (str.contains("c")) {
+				project.structure(false); 
+				project.compile("target"); 
+			} 
+			if (str.contains("r")) {
+				project.makeJar();
+				project.run();
+			}
+			if (str.contains("j")) project.makeJar(); 
+			if (str.contains("w")) {
+				project.compileWeb();
+				project.makeWar();
+			}
+			if (str.contains("e")) project.makeDotEnv();
+			if (str.contains("s")) {
+				project.makeJar();
+				project.clean();
+				project.copyJar(true);
+			}
+		}
+
+		if (str.equals("run", "jar", "war")) {
+			if (new File("libs").exists() || new File("libs").exists()) 
+				project.installDeps();
+
 			project.structure(false); 
 			project.compile("target"); 
 			project.makeDotEnv(); 
-			project.run();
-		} else if (args[0].contains("init")) { 
-			if (args.length == 2) 
-				project.init(args[1]); 
-			else project.init(null);
-		} else if (args[0].contains("clean")) { 
+
+			if (str.equals("run")) {
+				project.makeJar();
+				project.run();
+			}
+			if (str.equals("jar")) project.makeJar(); 
+			if (str.equals("war")) {
+				project.compileWeb(); 
+				project.makeWar();
+			}
 			project.clean();
-		} else if (args[0].contains("jar")) { 
-			project.structure(true); 
-			project.compile("target");
-			project.makeDotEnv(); 
+		} else if (str.equals("local", "save")) {
 			project.makeJar(); 
 			project.clean();
-		} else if (args[0].contains("war")) { 
-			project.structure(true); 
-			project.compile("target"); 
-			project.installDeps();
-			project.makeDotEnv(); 
-			project.compileWeb(); 
-			project.makeWar(); 
+			project.copyJar(false);
+		} else if (str.equals("clean")) {
 			project.clean();
-		} else if (args[0].contains("compile")) { 
-			project.structure(true); 
-			project.compile("target"); 
-			project.makeDotEnv(); 
-		} else { 
-			System.out.println("not implemented"); 
+			project.cleanAfter();
+		} else if (str.equals("install")) {
+			project.installDeps();
+		} else if (str.equals("help")) {
+			project.help();
+		} else if (str.equals("init")) {
+			project.init(args[1]);
+		} else {
+			System.out.println("Not implemented yet");
+		}
+	}
+	public static class StrEq {
+		private String[] args;
+		public StrEq(String[] args) { this.args = args; }
+		public boolean contains(String arg) { return args[0].contains(arg); }
+		public boolean contains(String ...args) {
+			for (int i = 0; i < args.length; i++)
+				if (!this.args[0].contains(args[i])) return true;
+			return false;
+		}
+		public boolean equals(String arg) { return args[0].equals(arg); }
+		public boolean equals(String ...args) {
+			for (int i = 0; i < args.length; i++)
+				if (!this.args[0].equals(args[i])) return true;
+			return false;
 		}
 	}
 }

@@ -8,10 +8,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.stream.Collectors;
@@ -22,30 +23,57 @@ public class Project {
 		if (Files.exists(Paths.get("app.toml"))) { map = Toml.parse("app.toml");
 		} else { map = new HashMap<String, Map<String, String>>(); }
 	}
+	/**
+	 * deletes folders and files generated from the `JiFra`
+	 * @param libs if the libs should be deleted
+	 */
 	public void clean(boolean libs) {
 		if (map.get("root").get("clean") != null) {
 			if (libs) this.deleteLibsFolders();
 			this.deleteIfEndsWith(".", new File(".").list(), ".class", "target");
-			this.deleteSourceFolder();
-			this.deleteTargetFolder();
+		}
+	}
+	/**
+	 * copies jar file to local location
+	 * @param is if the file should be replaced in the location
+	 */
+	public void copyJar(boolean is) {
+		var name = this.map.get("root").get("name").replace("\"", "");
+		var to = this.map.get("support").get("local").replace("\"", "");
+		System.out.println(name+".jar"+" "+to+"/"+name+".jar");
+		if (!new File(to).exists()) new File(to).mkdirs();
+		try {
+			if (is) new File(to+"/"+name+".jar").delete();
+			Files.copy(Paths.get(name+".jar"), Paths.get(to+"/"+name+".jar"));
+		} catch (FileAlreadyExistsException e) {
+			this.err(e, "Failed to copy to location "+to+"/"+name+".jar because file already exists");
+			System.out.println("overwrite the file, using `jifra save`");
+		} catch (Exception e) {
+			this.err(e, "Failed to copy app.jar");
 		}
 	}
 	public void clean() { clean(false); }
+	public void cleanAfter() {
+		MavenStealer.deleteDir("target");
+		MavenStealer.deleteDir("src");
+	}
+	/**
+	 * downloads all dependencies and copies jar files from local
+	 */
 	public void installDeps() { 
 		System.out.println("installing dependencies..."); 
 		this.deleteLibsFolders(); 
 		MavenStealer.stealLibs("libs", this.map); 
 		MavenStealer.stealLibs("test-libs", this.map); 
+		MavenStealer.localLibs("local-libs", this.map.get("local-libs"));
 	}
+	/**
+	 * deletes folders and files generated from the `JiFra`
+	 */	
 	public void deleteLibsFolders() { 
 		MavenStealer.deleteDir("libs"); 
 		MavenStealer.deleteDir("test-libs"); 
-	}
-	public void deleteSourceFolder() { 
-		MavenStealer.deleteDir("src"); 
-	}
-	public void deleteTargetFolder() { 
-		MavenStealer.deleteDir("target"); 
+		MavenStealer.deleteDir("local-libs"); 
 	}
 	public void help() {
 		System.out.println(
@@ -56,7 +84,17 @@ public class Project {
 				"\trun\t\t\t- run program \n"+
 				"\thelp\t\t\t- this help \n"+
 				"\tjar\t\t\t- make jar \n"+
-				"\twar\t\t\t- make war"
+				"\twar\t\t\t- make war\n\n"+
+				"chaining commands: \n"+
+				"\t[command] -<flags>\n"+
+				"\tn - clean (new)\n"+
+				"\ti - install\n"+
+				"\tc - compile\n"+
+				"\tr - run\n"+
+				"\tj - make jar\n"+
+				"\tw - make war\n"+
+				"\te - make .env\n"+
+				"\ts - save jar"
 		);
 	}
 	public void init(String name) {
@@ -68,7 +106,8 @@ public class Project {
 			"[support]\n"+
 			"maven = \"https://repo1.maven.org/maven2/group/name/version/name-version.jar\"\n"+
 			"[libs]\n"+
-			"[test-libs]\n";
+			"[test-libs]\n"+
+			"[local-libs]\n";
 		String main_content = "public class Main {\n"+
 			"\tpublic static void main(String[] args) {\n"+
 			"\t\tSystem.out.println(\"Hello World!\");\n"+
@@ -82,28 +121,43 @@ public class Project {
 		} catch (Exception e) { this.errOut(e, "Failed to init of app named "+title); }
 	}
 	public void makeJar() {
+		this.runBash(
+				"jar cmvf target/META-INF/MANIFEST.MF " +this.map.get("root").get("name").replace("\"", "") +".jar -C target .", 
+				"Done making jar file", "Failed to make jar file"
+		);
+	}
+	public void runBash(String cmd, String msg, String err) {
 		try {
-			Process p = Runtime.getRuntime().exec(( "jar cmvf target/META-INF/MANIFEST.MF " +this.map.get("root").get("name").replace("\"", "") +".jar -C target .").split(" "));
+			Process p = Runtime.getRuntime().exec(cmd.split(" "));
 			p.waitFor();
 			this.printProcessError(p);
-			System.out.println(p.toString());
-			System.out.println("Done making jar file");
-		} catch (Exception e) { this.errOut(e, "Failed to make jar file"); }
+		} catch (Exception e) {
+			e.printStackTrace(); 
+			System.out.println(msg); 
+		}
 	}
 	public void makeWar() {
-		try {
-			Process p = Runtime.getRuntime().exec(("jar cmvf target/META-INF/MANIFEST.MF "+this.map.get("root").get("name").replace("\"", "")+".war -C target .").split(" "));
-			p.waitFor();
-			this.printProcessError(p);
-			System.out.println(p.toString());
-			System.out.println("Done making war file");
-		} catch (Exception e) { this.errOut(e, "Failed to make war file"); }
+		this.runBash(
+				"jar cmvf target/META-INF/MANIFEST.MF "+this.map.get("root").get("name").replace("\"", "")+".war -C target .",
+				"Done making war file", "Failed to make war file"
+		);
 	}
 	public void compileWeb() {
 		var name = this.map.get("root").get("name");
 		System.out.println("Name: "+name+" Group: "+this.map.get("root").get("group"));
 		var war = new WebApp(name, map.get("root").get("group"));
-		var sb = new StringBuilder( "<!DOCTYPE web-app PUBLIC '-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN' 'http://java.sun.com/dtd/web-app_2_3.dtd'>\n<webapp>\t<display-name>"+name+"</display-name>\n<distributable>\n</distributable>\n"+war.iterFilters()+war.iterServlets()+"</webapp>");
+		var sb = new StringBuilder();
+		sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+		sb.append("<web-app xmlns=\"https://jakarta.ee/xml/ns/jakartaee\"\n");
+		sb.append("\txmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n");
+		sb.append("\txsi:schemaLocation=\"https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/web-app_5_0.xsd\"\n");
+		sb.append("\tversion=\"5.0\"\n");
+		sb.append("\tmetadata-complete=\"true\"\n");
+		sb.append("\tdisplay-name="+name+">\n");
+		sb.append(war.iterFilters());
+		sb.append(war.iterServlets());
+		sb.append("</web-app>");
+
 		MavenStealer.deleteDir("target");
 		new File("target").mkdirs();
 		new File("target/META-INF").mkdirs();
@@ -122,6 +176,10 @@ public class Project {
 			for (String s: new File("libs").list()) { 
 				Files.copy(Paths.get("libs/"+s), Paths.get("target/WEB-INF/lib/"+s)); 
 			}
+			for (String s: new File("local-libs").list()) { 
+				Files.copy(Paths.get("local-libs/"+s), Paths.get("target/WEB-INF/lib/"+s)); 
+			}
+
 		} catch (Exception e) { this.errOut(e, "Failed to compile web app"); }
 		System.out.println("Done making war file");
 	}
@@ -162,17 +220,14 @@ public class Project {
 		String[] entries = index.list();
 		if (entries == null) return;
 		String group = "src/"+this.map.get("root").get("group").replace(".", "/").replace("\"", "");
-		System.out.println("Was created: "+new File(group).mkdirs());
-		
 		System.out.println("structure created in: "+group);
-		System.out.println("creating structure...");
-		this.interateEntries(index, entries, group);
+		this.inter(index, entries, group);
 	}
-	public void interateEntries(File index, String[] entries, String group) {
+	public void inter(File index, String[] entries, String group) {
 		for(String s: entries) {
 			File currentFile = new File(index.getPath(),s);
 			var folder = group+"/"+currentFile.getName();
-			if (s.startsWith("src") || s.startsWith("libs") || s.startsWith("test-libs") || s.startsWith("target")) continue;
+			if (s.startsWith("src") || s.contains("libs") || s.startsWith("target")) continue;
 			if (s.endsWith(".java")) {
 				File newFile = new File(index.getPath(), group+"/"+s);
 				InputStream is = null;
@@ -194,7 +249,7 @@ public class Project {
 				if (currentFile.list().length > 0)
 				new File(folder).mkdirs();
 
-				this.interateEntries(currentFile, currentFile.list(), "../"+folder);
+				this.inter(currentFile, currentFile.list(), "../"+folder);
 			}
 		}
 	}
@@ -221,40 +276,43 @@ public class Project {
 		this.compile(to, false);
 	}
 	public void run() {
+		this.runBash(
+				"java "+this.getLibs("target")+" "+this.map.get("root").get("group").replace("\"", "")+".Main", 
+				"Failed to run project", "Failed to run project"
+		);
+	}
+	public String getLibs(String end) {
+		List<String> libs_e = null;
 		try {
-			var check = Runtime.getRuntime();
-			var solve = "java -cp target "+this.map.get("root").get("group").replace("\"", "")+".Main";
-			var process = check.exec(solve.split(" "));
-			process.waitFor();
-			this.printProcessError(process);
-			System.out.println(process.inputReader().readLine());
-		} catch (Exception e) { 
-			this.errOut(e, "Failed to run project");
+			libs_e = List.of(new File("libs").list())
+				.stream().map(s -> "libs/"+s.replace("\"", ""))
+				.collect(Collectors.toList());
+			if (new File("local-libs").list() != null) {
+				libs_e.addAll(List.of(new File("local-libs").list()).stream()
+					.map(s -> "local-libs/"+s.replace("\"", ""))
+					.collect(Collectors.toList())
+				);
+			}
+		} catch (Exception e) {
+			System.out.println("Libs not found in `libs` or `local-libs`");
 		}
+		return libs_e == null ? "-cp "+end : "-cp "+libs_e.stream().collect(Collectors.joining(":"))+":"+end;
 	}
 	public void compile(String to, boolean deleteSrc) {
 		System.out.println("compiling...");
-		Runtime runtime = Runtime.getRuntime();
 		new File("target").mkdirs();
 		this.makeMetaMF();
 		try {
 			var sources = this.getJavaFiles("src", new File("src").list());
-			var libs_e = (new File("libs")).list();
-			var libs = "";
 			var sources_files = new BufferedWriter(new FileWriter("src/sources.txt"));
 			sources_files.write(sources);
 			sources_files.close();
-
-			var build_sup = "javac ";
-			if (libs_e != null) 
-				build_sup +="-cp "+Arrays.stream(libs_e).map(i -> "libs/"+i).collect(Collectors.joining(","))+" ";
-			System.out.println(build_sup+"-d "+to+" @src/sources.txt");
-			var build = runtime.exec((build_sup+"-d "+to+" @src/sources.txt").split(" "));
-
-			build.waitFor();
-			if (deleteSrc) this.deleteIfEndsWith(".", (new File(".")).list(), ".class", to);
-			this.printProcessError(build);
+			this.runBash(
+					"javac "+getLibs("")+" -d "+to+" @src/sources.txt",
+					"Done compiling", "Failed to compile project"
+			);
 		} catch (Exception e) { this.errOut(e, "Failed to compile project"); }
+		if (deleteSrc) this.deleteIfEndsWith(".", (new File(".")).list(), ".class", to);
 	}
 	void deleteIfEndsWith(String index, String[] list, String endsWith, String ignore) {
 		for(String s: list) {

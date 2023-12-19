@@ -3,6 +3,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -38,6 +40,24 @@ public class MavenStealer {
 				String[] parts = entry.getValue().split(":");
 				steal.wget(entry.getKey(), parts[0], parts[1]);
 			} else steal.wget(entry.getKey(), entry.getValue(), null);
+		}
+	}
+	public static void localLibs(String key, Map<String, String> map) {
+		System.out.println("------------------------------------------");
+		System.out.println("Copying Local Dependencies");
+		if (new File(key).mkdirs()) System.out.println("dependencies cloning for "+key);
+		try {
+			for (Map.Entry<String, String> entry : map.entrySet()) {
+				try {
+					if (entry.getValue() == "" || entry.getKey() == "") continue;
+					Files.copy(Paths.get(entry.getValue().replace("\"", "")), Paths.get(key+"/"+entry.getKey()+".jar"));
+				} catch (IOException e) {
+					System.out.println("Problem with copying "+entry.getValue()+" to "+key+"/"+entry.getKey());
+					e.printStackTrace();
+				}
+			}
+		} catch (NullPointerException e) {
+			System.out.println("WARNING: Missing Local Libs if you do not use them ignore this");
 		}
 	}
 	public MavenStealer(String origin, String root) { this.origin = origin; this.root = root; }

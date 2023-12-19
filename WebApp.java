@@ -1,6 +1,3 @@
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class WebApp {
@@ -11,51 +8,63 @@ public class WebApp {
 		this.group = group;
 		config = Toml.parse("web.toml");
 	}
+	public class XmlBuilder {
+		private StringBuilder sb = new StringBuilder("");
+		public byte level = 0;
+		public XmlBuilder add(String tag, String value) {
+			sb.append("\t".repeat(level)+"<"+tag+">"+value+"</"+tag+">\n"); return this;
+		}
+		public XmlBuilder start(String tag) {
+			sb.append("\t".repeat(level)+"<"+tag+">\n"); level++; return this;
+		}
+		public XmlBuilder end(String tag) {
+			level--; sb.append("\t".repeat(level)+"</"+tag+">\n"); return this;
+		}
+		public String render() { return this.sb.toString(); }
+	}
 	public String iterFilters() {
-		var sb = new StringBuilder("");
-		for (Map.Entry<String, Map<String, String>> entry : config.entrySet()) {
+		var xml = new XmlBuilder();
+		xml.level = 2;
+		config.entrySet().forEach((entry) -> {
 			if (entry.getKey().contains("filter.")) {
 				var lib = entry.getValue();
-				sb.append("\t\t<filter>\n");
-				System.out.println(Arrays.toString(entry.getKey().split("\\.")));
-				sb.append("\t\t\t<filter-name>"+entry.getKey().split("\\.")[1]+"</filter-name>\n");
-				sb.append("\t\t\t<filter-class>"+lib.get("class").split(":")+"</filter-class>\n");
-				var param = lib.get("param").split(",");
-				for (int i = 0; i < param.length; i++) {
-					sb.append("\t\t\t<init-param>\n");
-					System.out.println(Arrays.toString(param[i].split(":")));
-					sb.append("\t\t\t\t<param-name>"+param[i].split(":")[0].trim()+"</param-name>\n");
-					sb.append("\t\t\t\t<param-value>"+param[i].split(":")[1].trim()+"</param-value>\n");
-					sb.append("\t\t\t</init-param>\n");
+				xml.start("filter")
+					.add("filter-name", entry.getKey().split("\\.")[1])
+					.add("filter-class", lib.get("class").split(":")[0]);
+				var urls = lib.get("class").split(":")[1].split(",");
+				for (int i = 0; i < urls.length; i++) {
+					xml.start("filter-mapping")
+						.add("filter-name", entry.getKey().split("\\.")[1])
+						.add("url-pattern", urls[i])
+						.end("filter-mapping");
 				}
-				sb.append("\t\t</filter>\n");
-				var mappings = lib.get("class").split(":");
-				for (int i = 1; i < mappings.length; i++) {
-					sb.append("\t\t<filter-mapping>\n");
-					sb.append("\t\t\t<filter-name>"+entry.getKey().split("\\.")[1]+"</filter-name>\n");
-					sb.append("\t\t\t<url-pattern>"+mappings[i]+"</url-pattern>\n");
-					sb.append("\t\t</filter-mapping>\n");
-				}
+				xml.end("filter");
 			}
-		}
-		return sb.toString();
+		});
+		return xml.render();
 	}
 	public String iterServlets() {
-		var sb = new StringBuilder("");
-		var servlets = config.get("servlet");
-		for (Map.Entry<String, String> entry : servlets.entrySet()) {
-			var info = entry.getValue().split(":");
+		var xml = new XmlBuilder();
+		xml.level = 2;
+		var serlvets = config.get("servlet");
+		serlvets.forEach((key, value) -> {
+			var info = value.split(":");
 			var next = 1;
-			sb.append("\t\t<servlet>\n\t\t\t<servlet-name>"+entry.getKey()+"</servlet-name>\n\t\t\t<servlet-class>"+group+"."+info[0]+"</servlet-class>\n");
+			xml.start("servlet")
+				.add("servlet-name", key)
+				.add("servlet-class", group.replace("\"","")+"."+info[0].replace("\"",""));
 			if (info[info.length-1] == "0") {
-				sb.append("\t\t\t<load-on-startup>0</load-on-startup>\n");
+				xml.add("load-on-startup", "0");
 				next++;
 			}
-			sb.append("\t\t</servlet>\n");
+			xml.end("servlet");
 			if (info.length > next)
 				for (int i = 1; i < (info.length-next)+1; i++)
-					sb.append("\t\t<servlet-mapping>\n\t\t\t<servlet-name>"+entry.getKey()+"</servlet-name>\n\t\t\t<url-pattern>"+info[i]+"</url-pattern>\n\t\t</servlet-mapping>\n");
-		}
-		return sb.toString();
+					xml.start("servlet-mapping")
+						.add("servlet-name", key)
+						.add("url-pattern", info[i])
+						.end("servlet-mapping");
+		});
+		return xml.render();
 	}
 }
