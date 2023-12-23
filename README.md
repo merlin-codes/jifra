@@ -8,10 +8,13 @@ commands:
 	init [name]		- initialize project 
 	clean			- clean project 
 	install			- install all dependencies 
-	run			- run program 
-	help			- this help 
-	jar			- make jar 
-	war			- make war
+	run			    - run program 
+	help		    - this help 
+	jar			    - make jar 
+	war			    - make war
+    unjar           - extracts content of libs to target directory
+                      making easy to search trught if the project 
+                      has specified class
 
 chaining commands: 
 	[command] -<flags>

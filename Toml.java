@@ -36,7 +36,7 @@ public class Toml {
 				origin.put(key, map);
 			} else if (line.contains("=")) {
 				String[] arr = line.split("=");
-				map.put(arr[0].trim(), arr[1].trim());
+				map.put(arr[0].trim(), arr[1].trim().replace("\"", ""));
 			} else {
 				origin.get(key).put(line.trim(), "");
 			}

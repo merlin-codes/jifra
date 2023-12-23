@@ -9,7 +9,6 @@ public class Main {
 			return;
 		} 
 		StrEq str = new StrEq(args);
-		if (str.contains("install")) project.installDeps();
 
 		if (str.contains("-")) {
 			if (str.contains("n")) {
@@ -56,6 +55,8 @@ public class Main {
 				project.makeWar();
 			}
 			project.clean();
+		} else if (str.equals("unjar")) {
+			project.unjar();
 		} else if (str.equals("local", "save")) {
 			project.makeJar(); 
 			project.clean();
@@ -68,7 +69,8 @@ public class Main {
 		} else if (str.equals("help")) {
 			project.help();
 		} else if (str.equals("init")) {
-			project.init(args[1]);
+			if (args.length < 2) project.init(null);
+			else project.init(args[1]);
 		} else {
 			System.out.println("Not implemented yet");
 		}
@@ -79,13 +81,13 @@ public class Main {
 		public boolean contains(String arg) { return args[0].contains(arg); }
 		public boolean contains(String ...args) {
 			for (int i = 0; i < args.length; i++)
-				if (!this.args[0].contains(args[i])) return true;
+				if (this.args[0].contains(args[i])) return true;
 			return false;
 		}
 		public boolean equals(String arg) { return args[0].equals(arg); }
 		public boolean equals(String ...args) {
 			for (int i = 0; i < args.length; i++)
-				if (!this.args[0].equals(args[i])) return true;
+				if (this.args[0].equals(args[i])) return true;
 			return false;
 		}
 	}
