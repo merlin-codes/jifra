@@ -11,6 +11,7 @@ import java.io.OutputStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,8 +39,8 @@ public class Project {
 	 * @param is if the file should be replaced in the location
 	 */
 	public void copyJar(boolean is) {
-		var name = this.map.get("root").get("name").replace("\"", "");
-		var to = this.map.get("support").get("local").replace("\"", "");
+		var name = this.map.get("root").get("name");
+		var to = this.map.get("support").get("local");
 		System.out.println(name+".jar"+" "+to+"/"+name+".jar");
 		if (!new File(to).exists()) new File(to).mkdirs();
 		try {
@@ -116,19 +117,20 @@ public class Project {
 		try {
 			Files.write(Paths.get("app.toml"), app_content.getBytes());
 			Files.write(Paths.get("Main.java"), main_content.getBytes());
-			System.out.println("installing dependencies");
-			this.installDeps();
 		} catch (Exception e) { this.errOut(e, "Failed to init of app named "+title); }
 	}
 	public void makeJar() {
 		this.runBash(
-				"jar cmvf target/META-INF/MANIFEST.MF " +this.map.get("root").get("name").replace("\"", "") +".jar -C target .", 
+				"jar cmvf target/META-INF/MANIFEST.MF " +this.map.get("root").get("name") +".jar -C target .", 
 				"Done making jar file", "Failed to make jar file"
 		);
 	}
 	public void runBash(String cmd, String msg, String err) {
+		runBash(cmd, msg, err, null);
+	}
+	public void runBash(String cmd, String msg, String err, File chdir) {
 		try {
-			Process p = Runtime.getRuntime().exec(cmd.split(" "));
+			Process p = Runtime.getRuntime().exec(cmd.split(" "), null, chdir);
 			p.waitFor();
 			this.printProcessError(p);
 		} catch (Exception e) {
@@ -138,7 +140,7 @@ public class Project {
 	}
 	public void makeWar() {
 		this.runBash(
-				"jar cmvf target/META-INF/MANIFEST.MF "+this.map.get("root").get("name").replace("\"", "")+".war -C target .",
+				"jar cmvf target/META-INF/MANIFEST.MF "+this.map.get("root").get("name")+".war -C target .",
 				"Done making war file", "Failed to make war file"
 		);
 	}
@@ -203,7 +205,7 @@ public class Project {
 	}
 	public void makeMetaMF() {
 		try {
-			var main = this.map.get("root").get("group").replace("\"", "");
+			var main = this.map.get("root").get("group");
 			new File("target/META-INF").mkdir();
 			var buffer = new BufferedWriter(new FileWriter("target/META-INF/MANIFEST.MF"));
 			buffer.write("Manifest-Version: 1.0\nMain-Class: "+main+".Main\n");
@@ -219,7 +221,7 @@ public class Project {
 		File index = new File(".");
 		String[] entries = index.list();
 		if (entries == null) return;
-		String group = "src/"+this.map.get("root").get("group").replace(".", "/").replace("\"", "");
+		String group = "src/"+this.map.get("root").get("group").replace(".", "/");
 		System.out.println("structure created in: "+group);
 		this.inter(index, entries, group);
 	}
@@ -235,7 +237,9 @@ public class Project {
 				try {
 					is = new FileInputStream(currentFile);
 					os = new FileOutputStream(newFile);
-					os.write(("package "+group.replace("../", "").replace("/", ".").substring(4)+";\n\n").getBytes());
+					if (!new File("src/"+group).exists()) new File("src/"+group.replace("/", ".")).mkdirs();
+					System.out.println("package "+group.replace("src/", "").replace("/", ".")+";");
+					os.write(("package "+group.replace("src/", "").replace("/", ".")+";\n\n").getBytes());
 					byte[] buffer = new byte[1024];
 					int length;
 					while ((length = is.read(buffer)) > 0) {
@@ -253,6 +257,49 @@ public class Project {
 			}
 		}
 	}
+
+	/**
+	 * Unzips all jar files from libs and local-libs
+	 * and copies them to target file with target_libs to show what files were included
+	 */
+	public void unjar() {
+		try {
+			String[] libs = new File("libs").exists() ? 
+				new File("libs").list() : new String[]{};
+			String[] localLibs = new File("local-libs").exists() ? 
+				new File("local-libs").list() : new String[]{};
+			var root = new File("target_libs");
+			if (!root.exists()) root.mkdir();
+
+			for (int i = 0; i < localLibs.length; i++) {
+				this.runBash("jar xf "+"../local-libs/"+localLibs[i], "extracting "+localLibs[i], "Failed to extract "+localLibs[i], root);
+			}
+			for (int i = 0; i < libs.length; i++) {
+				this.runBash("jar xf "+"../libs/"+libs[i], "extracting "+libs[i], "Failed to extract "+libs[i], root);
+			}
+			System.out.println("Copy something: "+root.getName());
+			new File("target").mkdirs();
+			MavenStealer.deleteDir("target");
+			copyDirectory(root.getName(), "target");
+		} catch (Exception e) { this.errOut(e, "Failed to unjar"); }
+	}
+
+	/**
+	 * Copied from reddit so implemented not by me
+	 * @param from - directory to copy from (source)
+	 * @param to - directory to copy from (destination)
+	 */
+	public static void copyDirectory(String from, String to) throws IOException {
+		Files.walk(Paths.get(from)).forEach(source -> {
+				var destination = Paths.get(to, source.toString()
+						.substring(from.length()));
+			try {
+				Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		});
+	}
 	public void errOut(Exception e, String msg) { e.printStackTrace(); System.out.println(msg); }
 	public String getJavaFiles(String uri, String[] entries) {
 		if (entries == null) return "";
@@ -261,8 +308,8 @@ public class Project {
 			for(String s: entries) {
 				if (s.endsWith(".java")) {
 					sb.append("./"+uri+"/"+s+"\n");
-				} 
-				else if (new File(uri+"/"+s).isDirectory()) {
+					System.out.println("./"+uri+"/"+s);
+				} else if (new File(uri+"/"+s).isDirectory()) {
 					sb.append(this.getJavaFiles(uri+"/"+s, new File(uri+"/"+s).list()));
 				}
 			}
@@ -277,7 +324,7 @@ public class Project {
 	}
 	public void run() {
 		this.runBash(
-				"java "+this.getLibs("target")+" "+this.map.get("root").get("group").replace("\"", "")+".Main", 
+				"java "+this.getLibs("target")+" "+this.map.get("root").get("group")+".Main", 
 				"Failed to run project", "Failed to run project"
 		);
 	}
@@ -285,11 +332,11 @@ public class Project {
 		List<String> libs_e = null;
 		try {
 			libs_e = List.of(new File("libs").list())
-				.stream().map(s -> "libs/"+s.replace("\"", ""))
+				.stream().map(s -> "libs/"+s)
 				.collect(Collectors.toList());
 			if (new File("local-libs").list() != null) {
 				libs_e.addAll(List.of(new File("local-libs").list()).stream()
-					.map(s -> "local-libs/"+s.replace("\"", ""))
+					.map(s -> "local-libs/"+s)
 					.collect(Collectors.toList())
 				);
 			}
