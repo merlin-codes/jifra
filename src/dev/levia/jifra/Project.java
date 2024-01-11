@@ -1,3 +1,5 @@
+package dev.levia.jifra;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -58,18 +60,16 @@ public class Project {
 	}
 	public void clean() { clean(false); }
 	public void cleanAfter() {
-		FileControl.deleteDir("src");
-		FileControl.deleteDir("target");
-		if (map.get("root").get("clean") != null) {
-			this.deleteIfEndsWith("libs", new File(".").list(), "", "");
-			this.deleteIfEndsWith("test-libs", new File(".").list(), "", "");
-		}
+		MavenStealer.deleteDir("target");
+		MavenStealer.deleteDir("src");
 	}
 
 	/**
 	 * downloads all dependencies and copies jar files from local
 	 */
 	public void installDeps() { 
+		System.out.println("installing dependencies..."); 
+		this.deleteLibsFolders(); 
 		MavenStealer.stealLibs("libs", this.map); 
 		MavenStealer.stealLibs("test-libs", this.map); 
 		MavenStealer.localLibs("local-libs", this.map.get("local-libs"));
@@ -78,28 +78,59 @@ public class Project {
 	/**
 	 * deletes folders and files generated from the `JiFra`
 	 */	
-	public void cleanDeps() { 
+	public void deleteLibsFolders() { 
 		MavenStealer.deleteDir("libs"); 
 		MavenStealer.deleteDir("test-libs"); 
 		MavenStealer.deleteDir("local-libs"); 
 	}
 	public void help() {
-		System.out.println(DefaultFile.getSomeHelp());
+		System.out.println(
+				"commands: \n"+
+				"\tinit [name]\t\t- initialize project \n"+
+				"\tclean\t\t\t- clean project \n"+
+				"\tinstall\t\t\t- install all dependencies \n"+
+				"\trun\t\t\t- run program \n"+
+				"\thelp\t\t\t- this help \n"+
+				"\tjar\t\t\t- make jar \n"+
+				"\twar\t\t\t- make war\n\n"+
+				"chaining commands: \n"+
+				"\t[command] -<flags>\n"+
+				"\tn - clean (new)\n"+
+				"\ti - install\n"+
+				"\tc - compile\n"+
+				"\tr - run\n"+
+				"\tj - make jar\n"+
+				"\tw - make war\n"+
+				"\te - make .env\n"+
+				"\ts - save jar"
+		);
 	}
 	public void init(String name) {
 		var title = name;
-		if (name == null) title = System.getProperty("user.dir");
+		if (name == null) title = System.getProperty("user.name");
+		String app_content = "name = \""+title+"\"\n"+
+			"version = \"1.0.0\"\n"+
+			"group = \"com.example."+title+"\"\n"+
+			"[support]\n"+
+			"maven = \"https://repo1.maven.org/maven2/group/name/version/name-version.jar\"\n"+
+			"[libs]\n"+
+			"[test-libs]\n"+
+			"[local-libs]\n";
+		String main_content = "public class Main {\n"+
+			"\tpublic static void main(String[] args) {\n"+
+			"\t\tSystem.out.println(\"Hello World!\");\n"+
+			"\t}\n"+
+			"}\n";
 		try {
-			Files.write(Paths.get("app.toml"), DefaultFile.getAppToml(title));
-			Files.write(Paths.get("Main.java"), DefaultFile.getMainJava());
-		} catch (Exception e) { 
-			this.errOut(e, "Failed to init of app named "+title); 
-		}
+			Files.write(Paths.get("app.toml"), app_content.getBytes());
+			Files.write(Paths.get("Main.java"), main_content.getBytes());
+		} catch (Exception e) { this.errOut(e, "Failed to init of app named "+title); }
 	}
 	public void makeJar() {
-		List<String> fully = List.of(new File("libs").list());
-		fully.addAll(List.of(new File("test-libs").list()));
-		OwlControl.compileCmds(fully.toArray(new String[0]));
+		this.runBash(
+				"jar cmvf target/META-INF/MANIFEST.MF " +this.map.get("root").get("name") +".jar -C target .", 
+				"Done making jar file", "Failed to make jar file"
+		);
 	}
 	public void runBash(String cmd, String msg, String err) {
 		runBash(cmd, msg, err, null);
@@ -115,58 +146,81 @@ public class Project {
 		}
 	}
 	public void makeWar() {
-		OwlControl.buildArchive(Simple.arrToOne(
-			new File("libs").list(), new File("local-libs").list()
-		), this.map.get("root").get("name")+".war");
 		this.runBash(
-			"jar cmvf target/META-INF/MANIFEST.MF "+this.map.get("root").get("name")+".war -C target .",
-			"Done making war file", "Failed to make war file"
+				"jar cmvf target/META-INF/MANIFEST.MF "+this.map.get("root").get("name")+".war -C target .",
+				"Done making war file", "Failed to make war file"
 		);
 	}
 	public void compileWeb() {
 		var name = this.map.get("root").get("name");
-		System.out.println(
-				"Name: "+name+" Group: "+this.map.get("root").get("group"));
+		System.out.println("Name: "+name+" Group: "+this.map.get("root").get("group"));
+		var war = new WebApp(name, map.get("root").get("group"));
+		var sb = new StringBuilder();
+		sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+		sb.append("<web-app xmlns=\"https://jakarta.ee/xml/ns/jakartaee\"\n");
+		sb.append("\txmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n");
+		sb.append("\txsi:schemaLocation=\"https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/web-app_5_0.xsd\"\n");
+		sb.append("\tversion=\"5.0\"\n");
+		sb.append("\tmetadata-complete=\"true\"\n");
+		sb.append("\tdisplay-name="+name+">\n");
+		sb.append(war.iterFilters());
+		sb.append(war.iterServlets());
+		sb.append("</web-app>");
 
 		MavenStealer.deleteDir("target");
-		Simple.mkdirs("target", "target/META-INF", "target/WEB-INF", 
-			"target/WEB-INF/classes", "target/WEB-INF/lib");
-		Simple.w("target/META-INF/MANIFEST.MF", DefaultFile.getManifestXml("Main"));
+		new File("target").mkdirs();
+		new File("target/META-INF").mkdirs();
+		new File("target/WEB-INF").mkdirs();
+		new File("target/WEB-INF/classes").mkdirs();
+		new File("target/WEB-INF/lib").mkdirs();
 		try {
 			this.makeMetaMF();
-			Simple.w("target/WEB-INF/web.xml",
-				DefaultFile.getWebToml(name, 
-					this.map.get("root").get("group")));
-			Simple.w("target/META-INF/MANIFEST.MF", 
-					DefaultFile.getManifestXml("Main"));
+			Files.write(Paths.get("target/WEB-INF/web.xml"), sb.toString().getBytes());
+			Files.write(Paths.get("target/META-INF/context.xml"), ( "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"+ "<Context path="+name+"/>\n").getBytes());
 			this.structure(false);
 			this.compile("target/WEB-INF/classes");
-			Simple.w("target/META-INF/context.xml", 
-					DefaultFile.getContextXml(name));
-			if (new File("template").exists()) 
-				FileControl.copyFolder("template", "target");
-			for (String s: new File("libs").list()) 
-				FileControl.copyFolder("libs/"+s, "target/WEB-INF/lib/"+s);
+			Files.write(Paths.get("target/index.html"), ("<!DOCTYPE html><html><head><title>"+name+"</title></head><body><h1>Hello World!</h1></body></html>").getBytes());
+			if (new File("template").exists()) Files.copy(Paths.get("template"), Paths.get("target"));
+
+			for (String s: new File("libs").list()) { 
+				Files.copy(Paths.get("libs/"+s), Paths.get("target/WEB-INF/lib/"+s)); 
+			}
 			for (String s: new File("local-libs").list()) { 
-				FileControl.copyFolder("local-libs/"+s, 
-						"target/WEB-INF/lib/"+s);
+				Files.copy(Paths.get("local-libs/"+s), Paths.get("target/WEB-INF/lib/"+s)); 
 			}
 
-		} catch (Exception e) { 
-			this.errOut(e, "Failed to compile web app"); 
-		}
+		} catch (Exception e) { this.errOut(e, "Failed to compile web app"); }
 		System.out.println("Done making war file");
 	}
 	public void makeDotEnv() {
-		var env = this.map.get("env");
-		if (env != null) 
-			Simple.w(".env", DefaultFile.getDotEnv(env));
+		try {
+			var env = this.map.get("env");
+			if (env != null) {
+				var buffer = new BufferedWriter(new FileWriter(".env"));
+				for (Map.Entry<String, String> entry : env.entrySet()) {
+					if (entry.getValue().startsWith("UUID-")) {
+						var r = new Random();
+						var uuid = Long.toHexString(r.nextLong());
+						uuid = uuid.substring(0, 8)+"-"+uuid.substring(8, 12)+"-"+uuid.substring(12, 16)+"-"+uuid.substring(16, 20)+"-"+uuid.substring(20, 32);
+						buffer.write(entry.getKey()+"="+uuid+"\n");
+					} else if (entry.getValue().equals("")) { continue;
+					} else { buffer.write(entry.getKey()+"="+entry.getValue()+"\n"); }
+				}
+				buffer.close();
+			}
+		} catch (Exception e) { this.errOut(e, "Failed to make .env file"); }
 	}
 	public void makeMetaMF() {
-		var main = this.map.get("root").get("group");
-		new File("target/META-INF").mkdir();
-		Simple.w("target/META-INF/MANIFEST.MF", 
-				DefaultFile.getManifestXml(main));
+		try {
+			var main = this.map.get("root").get("group");
+			new File("target/META-INF").mkdir();
+			var buffer = new BufferedWriter(new FileWriter("target/META-INF/MANIFEST.MF"));
+			buffer.write("Manifest-Version: 1.0\nMain-Class: "+main+".Main\n");
+			buffer.close();
+		} catch (Exception e) {
+			this.err(e, "Failed to make MANIFEST.MF file");
+			System.out.println("please check: if you have defined group in app.toml next to name...");
+		}
 	}
 	public void err(Exception e, String msg) { e.printStackTrace(); System.out.println(msg); }
 	public void structure(boolean deleteSource) {
@@ -174,34 +228,42 @@ public class Project {
 		File index = new File(".");
 		String[] entries = index.list();
 		if (entries == null) return;
-		String group = "src/"+
-			this.map.get("root").get("group").replace(".", "/");
+		String group = "src/"+this.map.get("root").get("group").replace(".", "/");
 		new File(group).mkdirs();
 		System.out.println("structure created at: "+group);
 		this.inter(index, entries, group);
 	}
 	public void inter(File index, String[] entries, String group) {
-		var listing = FileControl.returnIfEndsWith(index.getPath(), entries, ".java", "libs");
-		FileControl.ifEnds(index.getPath(), entries, ".java", "libs", (String s) -> {
-			File newFile = new File(index.getPath(), group+"/"+s);
-			InputStream is = null;
-			OutputStream os = null;
-			try {
-				is = new FileInputStream(new File(s));
-				os = new FileOutputStream(newFile);
-				if (!new File("src/"+group).exists()) new File("src/"+group.replace("/", ".")).mkdirs();
-				System.out.println("package "+group.replace("src/", "").replace("/", ".")+";");
-				os.write(("package "+group.replace("src/", "").replace("/", ".")+";\n\n").getBytes());
-				byte[] buffer = new byte[1024];
-				int length;
-				while ((length = is.read(buffer)) > 0) {
-					os.write(buffer, 0, length);
-				}
-				is.close();
-				os.close();
-			} catch (Exception e) { this.errOut(e, "Failed to append package to: "+s); }
-			return null;
-		});
+		for(String s: entries) {
+			File currentFile = new File(index.getPath(),s);
+			var folder = group+"/"+currentFile.getName();
+			if (s.startsWith("src") || s.contains("libs") || s.startsWith("target")) continue;
+			if (s.endsWith(".java")) {
+				File newFile = new File(index.getPath(), group+"/"+s);
+				InputStream is = null;
+				OutputStream os = null;
+				try {
+					is = new FileInputStream(currentFile);
+					os = new FileOutputStream(newFile);
+					if (!new File("src/"+group).exists()) new File("src/"+group.replace("/", ".")).mkdirs();
+					System.out.println("package "+group.replace("src/", "").replace("/", ".")+";");
+					os.write(("package "+group.replace("src/", "").replace("/", ".")+";\n\n").getBytes());
+					byte[] buffer = new byte[1024];
+					int length;
+					while ((length = is.read(buffer)) > 0) {
+						os.write(buffer, 0, length);
+					}
+					is.close();
+					os.close();
+				} catch (Exception e) { this.errOut(e, "Failed to append package to: "+s); }
+			}
+			if (currentFile.isDirectory()) {
+				if (currentFile.list().length > 0)
+				new File(folder).mkdirs();
+
+				this.inter(currentFile, currentFile.list(), "../"+folder);
+			}
+		}
 	}
 
 	/**
