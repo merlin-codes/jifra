@@ -3,9 +3,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.Map;
 
 import java.net.URI;
@@ -27,38 +24,36 @@ public class MavenStealer {
 		MavenStealer.deleteRecursive(dir, entries);
 
 		if (!index.delete()) System.out.println("failed to delete "+dir);
+		System.out.println("deleted "+dir);
 	}
-	public static void stealLibs(String key, Map<String, Map<String, String>> map) {
+	public static void stealLibs(String key, Map<String, String> map) {
 		System.out.println("--------------------------------------------------");
+
 		if (new File(key).mkdirs()) System.out.println("dependencies cloning for "+key);
-		if (map.get("libs") == null) System.out.println(key+" is not defined in app.toml");
-		for (Map.Entry<String, String> entry : map.get(key).entrySet()) {
-			if (entry.getValue() == "" || (map.get("support") == null && map.get("support").get("maven") == null) ) continue;
-			System.out.println("Support: "+Arrays.toString(map.get("support").entrySet().toArray()));
-			MavenStealer steal = new MavenStealer(map.get("support").get("maven"), key+"/");
-			if (entry.getValue().contains(":")) {
-				String[] parts = entry.getValue().split(":");
-				steal.wget(entry.getKey(), parts[0], parts[1]);
-			} else steal.wget(entry.getKey(), entry.getValue(), null);
+		if (Toml.Info.libs == null) {
+			System.out.println(key+" is not defined in app.toml");
+			return;
 		}
+
+		map.forEach((k, v) -> {
+			if (v == "" || (map.get("support") == null 
+				&& Toml.Info.maven == null)) return;
+			MavenStealer steal = new MavenStealer(Toml.Info.maven, key+"/");
+			if (v.contains(":")) {
+				String[] parts = v.split(":");
+				steal.wget(k, parts[0], parts[1]);
+			} else steal.wget(k, v, null);
+		});
 	}
-	public static void localLibs(String key, Map<String, String> map) {
+	public static void localLibs(String key) {
 		System.out.println("------------------------------------------");
 		System.out.println("Copying Local Dependencies");
 		if (new File(key).mkdirs()) System.out.println("dependencies cloning for "+key);
-		try {
-			for (Map.Entry<String, String> entry : map.entrySet()) {
-				try {
-					if (entry.getValue() == "" || entry.getKey() == "") continue;
-					Files.copy(Paths.get(entry.getValue().replace("\"", "")), Paths.get(key+"/"+entry.getKey()+".jar"));
-				} catch (IOException e) {
-					System.out.println("Problem with copying "+entry.getValue()+" to "+key+"/"+entry.getKey());
-					e.printStackTrace();
-				}
-			}
-		} catch (NullPointerException e) {
-			System.out.println("WARNING: Missing Local Libs if you do not use them ignore this");
-		}
+		if (Toml.Info.localLibs != null)
+		Toml.Info.localLibs.forEach((i, v) -> {
+			if (i == "" || i.isEmpty() || v == "" || v.isEmpty()) return;
+			FileControl.copy(v.replace("\"", ""), key+"/"+i+".jar");
+		});
 	}
 	public MavenStealer(String origin, String root) { this.origin = origin; this.root = root; }
 	public void wget(String name, String group, String version) {
@@ -68,38 +63,29 @@ public class MavenStealer {
 		stealFile(name+".jar", url);
 	}
 	public String getLatest(String url) {
-		try {
-			BufferedInputStream in = getBufferedURL(url+"maven-metadata.xml");
-			byte dataBuffer[] = new byte[1024];
-			int bytesRead;
-			String latest = "";
-			String read = "";
-			while ((bytesRead = in.read(dataBuffer, 0, 1024)) != -1) {
-				read += new String(dataBuffer, 0, bytesRead);
-			}
-			read.substring(read.indexOf("<latest>")+8, read.indexOf("</latest>"));
-			latest = read.substring(read.indexOf("<latest>")+8, read.indexOf("</latest>"));
-			in.close();
-			return latest;
-		} catch (IOException e) {
-			System.out.println("Exception: " + e);
-			System.out.println("File getting not working: "+this.root+" url getting from: "+url+"maven-metadata.xml");
-		}
-		return "";
+		stealFile("maven-metadata.xml", url.replace("\"", "")+"maven-metadata.xml");
+		var read = FileControl.read("maven-metadata.xml");
+		return read.substring(read.indexOf("<latest>")+8, read.indexOf("</latest>"));
 	}
-	public BufferedInputStream getBufferedURL(String url) {
-		try { return new BufferedInputStream((new URI(url.replace("\"", ""))).toURL().openStream()); } 
-		catch (IOException e) { 
-			System.out.println("Exception: " + e); System.out.println("File getting not working: "+this.root+" url getting from: "+url.replace("\"", ""));
-		} catch (URISyntaxException e) { 
-			System.out.println("Exception: " + e); System.out.println("File getting not working: "+this.root+" url getting from: "+url.replace("\"", ""));
-		}
-		return null;
-	}
-	public void stealFile(String name, String url) {
+
+	/**
+	 * Just another shortcut - Steals a file from a url
+	 * @param name - name of the file
+	 * @param url - url of the file
+	 */
+	public void stealFile(String name, String url) { stealFile(name, url, this.root); }
+
+	/**
+	 * Steals a file from a url
+	 * @param name - name of the file
+	 * @param url - url of the file
+	 * @param source - destination folder
+	 */
+	public static void stealFile(String name, String url, String source) {
 		try {
-			BufferedInputStream in = getBufferedURL(url);
-			FileOutputStream fileOutputStream = new FileOutputStream(this.root+name);
+			BufferedInputStream in = new BufferedInputStream(
+					(new URI(url.replace("\"", ""))).toURL().openStream()); 
+			FileOutputStream fileOutputStream = new FileOutputStream(source+name);
 			byte dataBuffer[] = new byte[1024];
 			int bytesRead;
 			while ((bytesRead = in.read(dataBuffer, 0, 1024)) != -1) {
@@ -108,8 +94,14 @@ public class MavenStealer {
 			fileOutputStream.close();
 			in.close();
 			System.out.println(name);
+		} catch (URISyntaxException e) { 
+			System.out.println("Exception: " + e); 
+			System.out.println("File getting not working: "+
+					source+" url getting from: "+url.replace("\"", ""));
 		} catch (IOException e) { 
-			System.out.println("Exception: " + e); System.out.println("File getting not working: "+this.root+" url getting from: "+url.replace("\"", ""));
+			System.out.println("Exception: " + e); 
+			System.out.println("File getting not working: "+
+					source+" url getting from: "+url.replace("\"", ""));
 		}
 	}
 }

@@ -11,8 +11,11 @@ public class DefaultFile {
 			"name = \""+title+"\"\n"+
 			"version = \"1.0.0\"\n"+
 			"group = \"com.example."+title+"\"\n"+
+			"\n"+
 			"[support]\n"+
 			"maven = \"https://repo1.maven.org/maven2/group/name/version/name-version.jar\"\n"+
+			"search = \"https://search.maven.org/search?q\"\n"+
+			"\n"+
 			"[libs]\n"+
 			"[test-libs]\n"+
 			"[local-libs]\n"
@@ -107,5 +110,60 @@ public class DefaultFile {
 			"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"+
 			"<Context path="+name+"/>\n"
 		).getBytes();
+	}
+
+	enum Cmd {
+		Compile("jar cmvf target/META-INF/MANIFEST.MF "),
+		;
+		private String value;
+		Cmd(String name) { this.value = name; }
+		public String val() { return value; }
+		public static String compile(String name, String ext) {
+			return compile(name, ext, "target", ".");
+		}
+		public static String javac(String libs, String to) {
+			return "javac "+libs+" -d "+to+" @src/sources.txt";
+		}
+		public static String extract(String lib) {
+			return extract2(lib, "");
+		}
+		public static String extract2(String lib, String name) {
+			return "jar xf "+"../"+name+"libs/"+lib+" .";
+		}
+
+		public static String compile(String name, String ext, String to, String from) {
+			return Compile + name + "." + ext + " -C target " + from;
+		}
+	}
+	enum Erno {
+		TomlSyntaxError(
+			"Failed to get search url from app.toml (should be in support)\n"+
+			"don't use `=` in the url it will be used url=args[1..]\n"+
+			"example toml: search = \"https://search.maven.org/search?q\""
+		),
+		LibrariesMissing(
+			"Failed to list libraries from filesystem -- skipping libraries outside `libs` folder"
+		),
+		FailedWar("Failed to create archive of typ war")
+
+		;
+		public static String failedJarAlreadyExist(String name) {
+			return "Failed to copy to location "+name+".jar because file already exists";
+		}
+
+		private String value;
+		Erno(String name) { this.value = name; }
+		public String val() { return value; }
+	}
+	enum Done {
+		DoneArchive("Completed creation archive of type "),
+
+		;
+		private String value;
+		Done(String name) { this.value = name; }
+		public String val() { return value; }
+		public static String archive(String ext) {
+			return DoneArchive + ext;
+		}
 	}
 }

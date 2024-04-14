@@ -1,0 +1,10 @@
+./src.oldways/dev/levia/jifra/ClassFileStructure.java
+./src.oldways/dev/levia/jifra/DefaultFile.java
+./src.oldways/dev/levia/jifra/FileControl.java
+./src.oldways/dev/levia/jifra/Main.java
+./src.oldways/dev/levia/jifra/MavenStealer.java
+./src.oldways/dev/levia/jifra/OwlControl.java
+./src.oldways/dev/levia/jifra/Project.java
+./src.oldways/dev/levia/jifra/Simple.java
+./src.oldways/dev/levia/jifra/Toml.java
+./src.oldways/dev/levia/jifra/WebApp.java

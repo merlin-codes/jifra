@@ -2,9 +2,8 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -54,7 +53,6 @@ public class OwlControl {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-
 	}
 
 	/**
@@ -76,13 +74,13 @@ public class OwlControl {
 	 * Compiles target with libs to jar
 	 * @param libs - libs to 
 	 */
-	public static void compileCmds(String[] libs) {
+	public static void compileCmds(List<String> libs) {
 		var libs_line = "";
-		if (libs.length > 0)
+		if (libs.size() > 1)
 			libs_line = "-cp "+
-				Arrays.stream(libs).collect(Collectors.joining(":"))+" ";
+				libs.stream().collect(Collectors.joining(":")).substring(1, -1);
 
-		OwlControl.exec("javac "+libs_line+libs+"-d "+target+" "+sources);
+		OwlControl.exec("javac "+libs_line+"-d "+target+" "+sources);
 	}
 	public static void buildArchive(String[] libs, String name) {
 		var libs_line = "";

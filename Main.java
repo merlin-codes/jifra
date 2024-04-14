@@ -1,94 +1,55 @@
 import java.io.File;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
 public class Main {
 	public static void main(String[] args) {
 		Project project = new Project();
 
-		if (args.length == 0 || args[0].equals("help")) {
-			project.help();
-			return;
-		} 
 		StrEq str = new StrEq(args);
+		if (str.check("h", "help") || args.length == 0) 
+			System.out.println(DefaultFile.getSomeHelp());
 
-		if (str.contains("-")) {
-			if (str.contains("n")) {
-				project.clean();
-				project.cleanAfter();
-			}
-			if (str.contains("i")) project.installDeps();
-			if (str.contains("c")) {
-				project.structure(false); 
-				project.compile("target"); 
-			} 
-			if (str.contains("r")) {
-				project.makeJar();
-				project.run();
-			}
-			if (str.contains("j")) project.makeJar(); 
-			if (str.contains("w")) {
-				project.compileWeb();
-				project.makeWar();
-			}
-			if (str.contains("e")) project.makeDotEnv();
-			if (str.contains("s")) {
-				project.makeJar();
-				project.clean();
-				project.copyJar(true);
-			}
-		}
-
-		if (str.equals("run", "jar", "war")) {
-			if (new File("libs").exists() || new File("libs").exists()) 
+		if (str.check("n", "clean")) { project.clean(); project.cleanAfter(); }
+		else if (str.check("i", "install")) project.installDeps();
+		else if (str.check("c", "compile")) { 
+			project.structure(); 
+			project.compile("target"); 
+			project.makeDotEnv();
+		} else if (str.check("r", "run") || str.check("j", "jar") || str.check("w", "war")) {
+			// @FIXME this is not required -> don't know if it should even be here
+			if (new File("libs").exists() || new File("local-libs").exists()) 
 				project.installDeps();
 
-			project.structure(false); 
+			project.structure(); 
 			project.compile("target"); 
 			project.makeDotEnv(); 
 
-			if (str.equals("run")) {
-				project.makeJar();
-				project.run();
-			}
-			if (str.equals("jar")) project.makeJar(); 
-			if (str.equals("war")) {
-				project.compileWeb(); 
-				project.makeWar();
-			}
-			project.clean();
-		} else if (str.equals("unjar")) {
-			project.unjar();
-		} else if (str.equals("local", "save")) {
-			project.makeJar(); 
-			project.clean();
-			project.copyJar(false);
-		} else if (str.equals("clean")) {
-			project.clean();
-			project.cleanAfter();
-		} else if (str.equals("install")) {
-			project.installDeps();
-		} else if (str.equals("help")) {
-			project.help();
-		} else if (str.equals("init")) {
+			if (str.check("r", "run")) { project.makeJar(); project.run(); }
+			else if (str.check("j", "jar")) project.makeJar();
+			else if (str.check("w", "war")) { project.compileWeb(); project.makeWar(); }
+		} 
+		else if (str.check("e", "env")) project.makeDotEnv();
+		else if (str.check("s", "save") || str.check("local", "local")) {
+			project.makeJar(); project.clean(); project.copyJar(false);
+		} else if (str.check("f", "find")) {
+			System.out.println("something");
+			project.searchMaven(Arrays.stream(args).skip(1).collect(Collectors.joining("+")));
+		} else if (str.check("o", "init")) {
 			if (args.length < 2) project.init(null);
-			else project.init(args[1]);
-		} else {
-			System.out.println("Not implemented yet");
+			project.init(args[1]);
 		}
 	}
+
+	// @TODO remove this hall of shame
 	public static class StrEq {
-		private String[] args;
+		private String[] args; 
 		public StrEq(String[] args) { this.args = args; }
-		public boolean contains(String arg) { return args[0].contains(arg); }
-		public boolean contains(String ...args) {
-			for (int i = 0; i < args.length; i++)
-				if (this.args[0].contains(args[i])) return true;
-			return false;
-		}
-		public boolean equals(String arg) { return args[0].equals(arg); }
-		public boolean equals(String ...args) {
-			for (int i = 0; i < args.length; i++)
-				if (this.args[0].equals(args[i])) return true;
-			return false;
+		public boolean check(String small, String big) {
+			if (args.length < 1) return false;
+			return (args[0].contains("-") && args[0].contains(small))
+				|| args[0].equals(big);
 		}
 	}
+
 }

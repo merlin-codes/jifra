@@ -1,29 +1,20 @@
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class Project {
 	Map<String, Map<String, String>> map;
 	public Project() {
 		map = Files.exists(Paths.get("app.toml")) ? 
 			Toml.parse("app.toml") : new HashMap<String, Map<String, String>>();
+		System.out.println(Files.exists(Paths.get("app.toml")));
 	}
 
 	/**
@@ -31,10 +22,36 @@ public class Project {
 	 * @param libs if the libs should be deleted
 	 */
 	public void clean(boolean libs) {
-		if (map.get("root").get("clean") != null) {
-			if (libs) this.deleteLibsFolders();
+		// @TODO check if clean is set in map if is clean after target and src folder
+		if (Toml.Info.maven == null) {
+			// if (libs) this.deleteLibsFolders();
 			this.deleteIfEndsWith(".", new File(".").list(), ".class", "target");
 		}
+	}
+
+	public void searchMaven(String text) {
+		var searchURI = Toml.Info.search.replace("SEARCHING_FOR", text);
+		System.out.println("searching: "+searchURI);
+		MavenStealer.stealFile("maven-search.json", searchURI, "");
+	}
+
+	private List<String> ignoreExt = List.of( ".txt", ".xml", ".jar");
+	public void mapRepo(String repo) {
+		MavenStealer.stealFile("maven-search.html", repo, "");
+		String read = "";
+		try { read = Files.readString(Paths.get("maven-search.html")); } 
+		catch (Exception e) {}
+
+		Arrays.stream(read.split("<a "))
+			.filter(i -> i.contains("</a>"))
+			.forEach(item -> {
+				var c = item.split("/</a>")[0].split(">")[1];
+				if (c.contains("."))
+					System.out.println(c.replaceAll("\\.", "_"));
+				ignoreExt.stream()
+					.filter(i -> c.contains(i))
+					.forEach(i -> System.out.println(c));;
+			});
 	}
 
 	/**
@@ -42,18 +59,20 @@ public class Project {
 	 * @param is if the file should be replaced in the location
 	 */
 	public void copyJar(boolean is) {
-		var name = this.map.get("root").get("name");
-		var to = this.map.get("support").get("local");
+		var name = Toml.Info.name;
+
+		var to = Toml.Info.local;
 		System.out.println(name+".jar"+" "+to+"/"+name+".jar");
 		if (!new File(to).exists()) new File(to).mkdirs();
 		try {
-			if (is) new File(to+"/"+name+".jar").delete();
+			Files.deleteIfExists(Paths.get(to+"/"+name+".jar"));
 			Files.copy(Paths.get(name+".jar"), Paths.get(to+"/"+name+".jar"));
+			if (is) new File(to+"/"+name+".jar").delete();
 		} catch (FileAlreadyExistsException e) {
-			this.err(e, "Failed to copy to location "+to+"/"+name+".jar because file already exists");
+			Simple.err(e, DefaultFile.Erno.failedJarAlreadyExist(to+"/"+name));
 			System.out.println("overwrite the file, using `jifra save`");
 		} catch (Exception e) {
-			this.err(e, "Failed to copy app.jar");
+			Simple.err(e, "Failed to copy app.jar");
 		}
 	}
 	public void clean() { clean(false); }
@@ -67,139 +86,150 @@ public class Project {
 	}
 
 	/**
-	 * downloads all dependencies and copies jar files from local
+	 * Downloads dependencies:
+	 *		maven, test_maven, local
 	 */
 	public void installDeps() { 
-		MavenStealer.stealLibs("libs", this.map); 
-		MavenStealer.stealLibs("test-libs", this.map); 
-		MavenStealer.localLibs("local-libs", this.map.get("local-libs"));
+		// @TODO check if Toml.Info is empty or not
+		MavenStealer.stealLibs("libs", Toml.Info.libs); 
+		MavenStealer.stealLibs("test-libs", Toml.Info.testLibs); 
+		MavenStealer.localLibs("local-libs");
 	}
 
 	/**
 	 * deletes folders and files generated from the `JiFra`
 	 */	
 	public void cleanDeps() { 
-		MavenStealer.deleteDir("libs"); 
-		MavenStealer.deleteDir("test-libs"); 
-		MavenStealer.deleteDir("local-libs"); 
-	}
-	public void help() {
-		System.out.println(DefaultFile.getSomeHelp());
+		FileControl.deleteDir("libs");
+		FileControl.deleteDir("test-libs"); 
+		FileControl.deleteDir("local-libs"); 
 	}
 	public void init(String name) {
 		var title = name;
 		if (name == null) title = System.getProperty("user.dir");
 		try {
-			Files.write(Paths.get("app.toml"), DefaultFile.getAppToml(title));
-			Files.write(Paths.get("Main.java"), DefaultFile.getMainJava());
+			Simple.w("app.toml", DefaultFile.getAppToml(title));
+			Simple.w("Main.java", DefaultFile.getMainJava());
 		} catch (Exception e) { 
-			this.errOut(e, "Failed to init of app named "+title); 
+			Simple.err(e, "Failed to init of app named "+title); 
 		}
 	}
 	public void makeJar() {
 		List<String> fully = List.of(new File("libs").list());
-		fully.addAll(List.of(new File("test-libs").list()));
-		OwlControl.compileCmds(fully.toArray(new String[0]));
-	}
-	public void runBash(String cmd, String msg, String err) {
-		runBash(cmd, msg, err, null);
-	}
-	public void runBash(String cmd, String msg, String err, File chdir) {
-		try {
-			Process p = Runtime.getRuntime().exec(cmd.split(" "), null, chdir);
-			p.waitFor();
-			this.printProcessError(p);
-		} catch (Exception e) {
-			e.printStackTrace(); 
-			System.out.println(msg); 
-		}
+		if (fully.size() == 0) fully = List.of(new File("local-libs").list());
+		if (fully.size() == 0) fully = List.of();
+		OwlControl.compileCmds(fully);
 	}
 	public void makeWar() {
 		OwlControl.buildArchive(Simple.arrToOne(
 			new File("libs").list(), new File("local-libs").list()
-		), this.map.get("root").get("name")+".war");
-		this.runBash(
-			"jar cmvf target/META-INF/MANIFEST.MF "+this.map.get("root").get("name")+".war -C target .",
-			"Done making war file", "Failed to make war file"
+		), Toml.Info.name+".war");
+		Simple.runBash(
+			DefaultFile.Cmd.compile(Toml.Info.name, "war"),
+			DefaultFile.Done.archive("war"), DefaultFile.Erno.FailedWar.val()
 		);
 	}
 	public void compileWeb() {
-		var name = this.map.get("root").get("name");
-		System.out.println(
-				"Name: "+name+" Group: "+this.map.get("root").get("group"));
+		System.out.println("Name: "+Toml.Info.name+" Group: "+Toml.Info.group);
 
 		MavenStealer.deleteDir("target");
-		Simple.mkdirs("target", "target/META-INF", "target/WEB-INF", 
-			"target/WEB-INF/classes", "target/WEB-INF/lib");
-		Simple.w("target/META-INF/MANIFEST.MF", DefaultFile.getManifestXml("Main"));
-		try {
-			this.makeMetaMF();
-			Simple.w("target/WEB-INF/web.xml",
-				DefaultFile.getWebToml(name, 
-					this.map.get("root").get("group")));
-			Simple.w("target/META-INF/MANIFEST.MF", 
-					DefaultFile.getManifestXml("Main"));
-			this.structure(false);
-			this.compile("target/WEB-INF/classes");
-			Simple.w("target/META-INF/context.xml", 
-					DefaultFile.getContextXml(name));
-			if (new File("template").exists()) 
-				FileControl.copyFolder("template", "target");
-			for (String s: new File("libs").list()) 
-				FileControl.copyFolder("libs/"+s, "target/WEB-INF/lib/"+s);
-			for (String s: new File("local-libs").list()) { 
-				FileControl.copyFolder("local-libs/"+s, 
-						"target/WEB-INF/lib/"+s);
-			}
+		try { Files.createDirectory(Paths.get("target")); } 
+		catch (Exception e) {Simple.err(e, "Failed to create directory target");}
 
-		} catch (Exception e) { 
-			this.errOut(e, "Failed to compile web app"); 
-		}
+		// @TODO mkdirs should not need to create every folder before that 
+		Simple.mkdirs("target/META-INF", "target/WEB-INF/classes", "target/WEB-INF/lib");
+		Simple.w("target/META-INF/MANIFEST.MF", DefaultFile.getManifestXml("Main"));
+
+		this.makeMetaMF();
+		this.structure();
+		Simple.w("target/WEB-INF/web.xml",
+			DefaultFile.getWebToml(Toml.Info.name, Toml.Info.group));
+		Simple.w("target/META-INF/MANIFEST.MF", 
+				DefaultFile.getManifestXml("Main"));
+		this.compile("target/WEB-INF/classes");
+		Simple.w("target/META-INF/context.xml", 
+				DefaultFile.getContextXml(Toml.Info.name));
+		if (new File("template").exists()) 
+			FileControl.copyFolder("template", "target");
+		for (String s: new File("libs").list()) 
+			FileControl.copyFolder("libs/"+s, "target/WEB-INF/lib/"+s);
+		Arrays.stream(new File("local-libs").list())
+			.forEach(i -> FileControl.copyFolder("local-libs/"+i, "target/WEB-INF/lib/"+i));
 		System.out.println("Done making war file");
 	}
+
+	// @TODO move to class FileManager
 	public void makeDotEnv() {
 		var env = this.map.get("env");
-		if (env != null) 
-			Simple.w(".env", DefaultFile.getDotEnv(env));
+		if (env != null) Simple.w(".env", DefaultFile.getDotEnv(env));
 	}
+
+	// @TODO move to class FileManager
 	public void makeMetaMF() {
-		var main = this.map.get("root").get("group");
+		var main = Toml.Info.group;
 		new File("target/META-INF").mkdir();
-		Simple.w("target/META-INF/MANIFEST.MF", 
-				DefaultFile.getManifestXml(main));
+		Simple.w("target/META-INF/MANIFEST.MF", DefaultFile.getManifestXml(main));
 	}
-	public void err(Exception e, String msg) { e.printStackTrace(); System.out.println(msg); }
-	public void structure(boolean deleteSource) {
-		if (deleteSource) MavenStealer.deleteDir("src");
+	/**
+	 * Rebuilds ./src/ folder structure
+	 */
+	public void structure() {
+		FileControl.deleteDir("src");
+		(new File("./src")).mkdirs();
+
 		File index = new File(".");
-		String[] entries = index.list();
-		if (entries == null) return;
-		String group = "src/"+
-			this.map.get("root").get("group").replace(".", "/");
-		new File(group).mkdirs();
-		System.out.println("structure created at: "+group);
-		this.inter(index, entries, group);
+
+		System.out.println("structure created at: "+Toml.Info.group);
+		try {
+			System.out.println("Create dir at: "+"src/"+Toml.Info.dirGroup());
+			Files.createDirectories(Paths.get("src/"+Toml.Info.dirGroup()));
+			System.out.println(new File("src/"+Toml.Info.dirGroup()).exists());
+		} catch (Exception e) {
+			Simple.err(e, "failed creation of directories group in src folder");
+		}
+		this.inter(index, index.list());
 	}
-	public void inter(File index, String[] entries, String group) {
-		var listing = FileControl.returnIfEndsWith(index.getPath(), entries, ".java", "libs");
+
+	/**
+	 * Appends package to index
+	 * @param index - index
+	 * @param entries - list of files
+	 * @param group - group
+	 */
+	public void inter(File index, String[] entries) {
+		System.out.println("Starting intereting");
 		FileControl.ifEnds(index.getPath(), entries, ".java", "libs", (String s) -> {
-			File newFile = new File(index.getPath(), group+"/"+s);
-			InputStream is = null;
-			OutputStream os = null;
-			try {
-				is = new FileInputStream(new File(s));
-				os = new FileOutputStream(newFile);
-				if (!new File("src/"+group).exists()) new File("src/"+group.replace("/", ".")).mkdirs();
-				System.out.println("package "+group.replace("src/", "").replace("/", ".")+";");
-				os.write(("package "+group.replace("src/", "").replace("/", ".")+";\n\n").getBytes());
-				byte[] buffer = new byte[1024];
-				int length;
-				while ((length = is.read(buffer)) > 0) {
-					os.write(buffer, 0, length);
+			if (s.contains("src") || s.contains("target")) return null;
+			var split = s.split("/");
+			var group_ext = "";
+			if (split.length > 2) {
+				System.out.println("splitting answer is: "+split[0]+" >> "+split[split.length-1]);
+				group_ext = "."+List.of(split).stream()
+					.skip(1).limit(split.length-2)
+					.collect(Collectors.joining("."));
+				try {
+					Files.createDirectories(Paths.get(
+								"./src/"+Toml.Info.dirGroup()+group_ext.replace(".", "/")));
+				} catch (Exception e) {
+					Simple.err(e, "couldn't create sub dir in the specified sources");
 				}
-				is.close();
-				os.close();
-			} catch (Exception e) { this.errOut(e, "Failed to append package to: "+s); }
+			}
+
+			System.out.println("Appending package from: " + "./src/"+Toml.Info.dirGroup()+s.substring(1)+" to "+s);
+			var groupStr = "package "+Toml.Info.group+group_ext;
+			String content = FileControl.read(s);
+			var needsPackage = false;
+
+			// @CHECK if there is already package defined then append root group
+			if (content.contains(";")) {
+				var firstLine = content.substring(0, content.indexOf(";"));
+				if (firstLine.contains("package")) {
+					groupStr += "."+content.substring(content.indexOf("package "), content.indexOf(";"));
+					content = content.substring(content.indexOf(";"));
+				} else { needsPackage = true; }
+			}
+			if (needsPackage)
+				Simple.w("./src/"+Toml.Info.dirGroup()+s.substring(1), (groupStr+";\n\n"+content).getBytes());
 			return null;
 		});
 	}
@@ -209,49 +239,42 @@ public class Project {
 	 * and copies them to target file with target_libs to show what files were included
 	 */
 	public void unjar() {
+		String[] libs = new File("libs").exists() ? 
+			new File("libs").list() : new String[]{};
+		String[] localLibs = new File("local-libs").exists() ? 
+			new File("local-libs").list() : new String[]{};
+		var root = new File("target_libs");
+		if (!root.exists()) root.mkdir();
+
+		// @TODO think about better solution for this
+		// too many lines (KISS)
+		Simple.multipleExec(DefaultFile.Cmd::extract2, 
+				"Extractioin of local lib done...", 
+				"extraction of local lib failed", 
+				root, localLibs, "local");
+
+		// @TODO think about better solution for this
+		Simple.multipleExec(DefaultFile.Cmd::extract, 
+				"Extractioin of local lib done...", 
+				"extraction of local lib failed", 
+				root, libs);
+
+		System.out.println("Copy something: "+root.getName());
+
+		MavenStealer.deleteRecursive("target", new File("target").list());
 		try {
-			String[] libs = new File("libs").exists() ? 
-				new File("libs").list() : new String[]{};
-			String[] localLibs = new File("local-libs").exists() ? 
-				new File("local-libs").list() : new String[]{};
-			var root = new File("target_libs");
-			if (!root.exists()) root.mkdir();
-
-			for (int i = 0; i < localLibs.length; i++) {
-				this.runBash("jar xf "+"../local-libs/"+localLibs[i], "extracting "+localLibs[i], "Failed to extract "+localLibs[i], root);
-			}
-			for (int i = 0; i < libs.length; i++) {
-				this.runBash("jar xf "+"../libs/"+libs[i], "extracting "+libs[i], "Failed to extract "+libs[i], root);
-			}
-			System.out.println("Copy something: "+root.getName());
-			new File("target").mkdirs();
-			MavenStealer.deleteDir("target");
-			copyDirectory(root.getName(), "target");
-		} catch (Exception e) { this.errOut(e, "Failed to unjar"); }
+			Files.deleteIfExists(Paths.get("target"));
+			Simple.copyDirectory(root.getName(), "target");
+		} catch (Exception e) { Simple.err(e, "Failed to unjar"); }
 	}
 
-	/**
-	 * Copied from reddit so implemented not by me
-	 * @param from - directory to copy from (source)
-	 * @param to - directory to copy from (destination)
-	 */
-	public static void copyDirectory(String from, String to) throws IOException {
-		Files.walk(Paths.get(from)).forEach(source -> {
-				var destination = Paths.get(to, source.toString()
-						.substring(from.length()));
-			try {
-				Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		});
-	}
-	public void errOut(Exception e, String msg) { e.printStackTrace(); System.out.println(msg); }
+	// @TODO should use generic way of getting all java files
 	public String getJavaFiles(String uri, String[] entries) {
 		if (entries == null) return "";
 		var sb = new StringBuilder();
 		try {
-			for(String s: entries) {
+			// return FileControl.returnIfEndsWith(".", new File(".").list(), "java", "libs");
+			for(String s : entries) {
 				if (s.endsWith(".java")) {
 					sb.append("./"+uri+"/"+s+"\n");
 					System.out.println("./"+uri+"/"+s);
@@ -261,50 +284,38 @@ public class Project {
 			}
 			return sb.toString();
 		} catch (Exception e) {
-			this.errOut(e, "Failed to get java files");
+			Simple.err(e, "Failed to get java files");
 			return "";
 		}
 	}
-	public void compile(String to) {
-		this.compile(to, false);
-	}
+
+	// @TODO what the fuck is this? oveloading method should not be required
+	public void compile(String to) { this.compile(to, false); }
 	public void run() {
-		this.runBash(
-				"java "+this.getLibs("target")+" "+this.map.get("root").get("group")+".Main", 
-				"Failed to run project", "Failed to run project"
+		Simple.runBash(
+			"java "+this.getLibs("target")+" "+Toml.Info.group+".Main", 
+			"Failed to run project", "Failed to run project"
 		);
 	}
 	public String getLibs(String end) {
-		List<String> libs_e = null;
-		try {
-			libs_e = List.of(new File("libs").list())
-				.stream().map(s -> "libs/"+s)
-				.collect(Collectors.toList());
-			if (new File("local-libs").list() != null) {
-				libs_e.addAll(List.of(new File("local-libs").list()).stream()
-					.map(s -> "local-libs/"+s)
-					.collect(Collectors.toList())
-				);
-			}
-		} catch (Exception e) {
-			System.out.println("Libs not found in `libs` or `local-libs`");
-		}
-		return libs_e == null ? "-cp "+end : "-cp "+libs_e.stream().collect(Collectors.joining(":"))+":"+end;
+		String libs_e = null;
+		libs_e = Stream.concat(
+			List.of(new File("libs").list()).stream().map(s -> "libs/"+s), 
+			List.of(new File("local-libs").list()).stream().map(s -> "local-libs/"+s)
+		).collect(Collectors.joining(":"));
+		return libs_e == null ? "-cp "+end : "-cp "+libs_e+":"+end;
 	}
 	public void compile(String to, boolean deleteSrc) {
 		System.out.println("compiling...");
-		new File("target").mkdirs();
+		FileControl.deleteDir("target");
+		FileControl.copyFileStructure("src", "target");
 		this.makeMetaMF();
-		try {
 			var sources = this.getJavaFiles("src", new File("src").list());
-			var sources_files = new BufferedWriter(new FileWriter("src/sources.txt"));
-			sources_files.write(sources);
-			sources_files.close();
-			this.runBash(
-					"javac "+getLibs("")+" -d "+to+" @src/sources.txt",
-					"Done compiling", "Failed to compile project"
-			);
-		} catch (Exception e) { this.errOut(e, "Failed to compile project"); }
+		try {
+			Files.write(Paths.get("src/sources.txt"), sources.getBytes());
+		} catch (Exception e) { Simple.err(e, "Failed to compile project"); }
+		Simple.runBash(DefaultFile.Cmd.javac(getLibs(""), to), 
+				"Done compiling", "Failed to compile project");
 		if (deleteSrc) this.deleteIfEndsWith(".", (new File(".")).list(), ".class", to);
 	}
 	void deleteIfEndsWith(String index, String[] list, String endsWith, String ignore) {
@@ -316,13 +327,6 @@ public class Project {
 			} else if (new File(index+"/"+s).isDirectory()) {
 				this.deleteIfEndsWith(index+"/"+s, new File(index+"/"+s).list(), endsWith, ignore);
 			}
-		}
-	}
-	void printProcessError(Process build) throws IOException, InterruptedException {
-		var buffer = new BufferedReader(new InputStreamReader(build.getErrorStream()));
-		String line;
-		while ((line = buffer.readLine()) != null) {
-			System.out.println(line);
 		}
 	}
 }
