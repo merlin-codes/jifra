@@ -1,3 +1,5 @@
+package dev.levia.jifra;
+
 import java.io.File;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;

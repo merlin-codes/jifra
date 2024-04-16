@@ -1,15 +1,15 @@
 name = "JiFraCLI"
-version = "1.0.0"
+version = "1.5.0"
 group = "dev.levia.jifra"
 
 [support]
 maven = "https://repo1.maven.org/maven2/group/name/version/name-version.jar"
 local = "/opt/levia"
+search = "https://search.maven.org/solrsearch/select?q=a:SEARCHING_FOR&rows=20&wt=json"
 
 [libs]
 
 [test-libs]
 
 [local]
-Log = "/opt/levia/log.jar"
-
+Log = "/opt/levia/Log.jar"

@@ -1,3 +1,5 @@
+package dev.levia.jifra;
+
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileOutputStream;

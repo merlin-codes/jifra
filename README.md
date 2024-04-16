@@ -1,28 +1,28 @@
 # JiFra
 Basic Java Project Manager CLI
 
-
 ## Commands
 ```js
 commands: 
-	init [name]		- initialize project 
-	clean			- clean project 
-	install			- install all dependencies 
-	run			    - run program 
-	help		    - this help 
-	jar			    - make jar 
-	war			    - make war
+	init [name]         - initialize project 
+	clean           - clean project 
+	install         - install all dependencies 
+    find            - search for deps in mavenrepository
+	run         - run program 
+	help            - this help 
+	jar         - make jar 
+	war         - make war
     unjar           - extracts content of libs to target directory
                       making easy to search trught if the project 
                       has specified class
 
 chaining commands: 
 	[command] -<flags>
-	n - clean (new)
+	n - init (new)
 	i - install
 	c - compile
-	r - run
-	j - make jar
+	r - run (jar + execution)
+	j - archive jar
 	w - make war
 	e - make .env
 	s - save jar

@@ -1,0 +1,10 @@
+./src/dev/levia/jifra/WebApp.java
+./src/dev/levia/jifra/io/FileManager.java
+./src/dev/levia/jifra/DefaultFile.java
+./src/dev/levia/jifra/Simple.java
+./src/dev/levia/jifra/FileControl.java
+./src/dev/levia/jifra/Toml.java
+./src/dev/levia/jifra/MavenStealer.java
+./src/dev/levia/jifra/Main.java
+./src/dev/levia/jifra/Project.java
+./src/dev/levia/jifra/OwlControl.java
