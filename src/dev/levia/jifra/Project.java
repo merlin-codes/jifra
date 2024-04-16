@@ -109,9 +109,10 @@ public class Project {
 	public void init(String name) {
 		var title = name;
 		if (name == null) title = System.getProperty("user.dir");
+		new File(title).mkdir();
 		try {
-			Simple.w("app.toml", DefaultFile.getAppToml(title));
-			Simple.w("Main.java", DefaultFile.getMainJava());
+			Simple.w(title+"/app.toml", DefaultFile.getAppToml(title));
+			Simple.w(title+"/Main.java", DefaultFile.getMainJava());
 		} catch (Exception e) { 
 			Simple.err(e, "Failed to init of app named "+title); 
 		}
@@ -121,6 +122,7 @@ public class Project {
 		if (fully.size() == 0) fully = List.of(new File("local-libs").list());
 		if (fully.size() == 0) fully = List.of();
 		OwlControl.compileCmds(fully);
+		OwlControl.buildArchive(fully.toArray(new String[0]), Toml.Info.name+".jar");
 	}
 	public void makeWar() {
 		OwlControl.buildArchive(Simple.arrToOne(

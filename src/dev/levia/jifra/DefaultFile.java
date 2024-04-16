@@ -90,6 +90,7 @@ public class DefaultFile {
 			"commands: \n"+
 			"\tinit [name]\t\t- initialize project \n"+
 			"\tclean\t\t\t- clean project \n"+
+			"\tunjar\t\t\t- extract all libraries to the target folder \n"+
 			"\tinstall\t\t\t- install all dependencies \n"+
 			"\trun\t\t\t- run program \n"+
 			"\thelp\t\t\t- this help \n"+
@@ -99,6 +100,7 @@ public class DefaultFile {
 			"\t[command] -<flags>\n"+
 			"\tn - clean (new)\n"+
 			"\ti - install\n"+
+			"\tu - unjar\n"+
 			"\tc - compile\n"+
 			"\tr - run\n"+
 			"\tj - make jar\n"+

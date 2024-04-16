@@ -4,6 +4,8 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -85,14 +87,15 @@ public class OwlControl {
 		OwlControl.exec("javac "+libs_line+"-d "+target+" "+sources);
 	}
 	public static void buildArchive(String[] libs, String name) {
-		var libs_line = "";
-		if (libs.length > 0)
-			libs_line = "-cp "+
-				Arrays.stream(libs).collect(Collectors.joining(":"))+" ";
+		// creates place for libs to be pasted
+		new File("target/libs").delete();
+		new File("target/libs").mkdirs();
+
+		FileControl.copyFolder("libs", "target/libs");
+		FileControl.copyFolder("local-libs", "target/libs");
 
 		OwlControl.exec(
-			"jar "+libs_line+
-			" cmvf target/META-INF/MANIFEST.MF "+name+" -C "+target+" ."
+			"jar cmvf target/META-INF/MANIFEST.MF "+name+" -C "+target+" ."
 		);
 	}
 	/**

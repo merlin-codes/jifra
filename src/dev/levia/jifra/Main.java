@@ -11,8 +11,7 @@ public class Main {
 		StrEq str = new StrEq(args);
 		if (str.check("h", "help") || args.length == 0) 
 			System.out.println(DefaultFile.getSomeHelp());
-
-		if (str.check("n", "clean")) { project.clean(); project.cleanAfter(); }
+		else if (str.check("n", "clean")) { project.clean(); project.cleanAfter(); }
 		else if (str.check("i", "install")) project.installDeps();
 		else if (str.check("c", "compile")) { 
 			project.structure(); 
@@ -30,7 +29,7 @@ public class Main {
 			if (str.check("r", "run")) { project.makeJar(); project.run(); }
 			else if (str.check("j", "jar")) project.makeJar();
 			else if (str.check("w", "war")) { project.compileWeb(); project.makeWar(); }
-		} 
+		} else if (str.check("u", "unjar")) project.unjar();
 		else if (str.check("e", "env")) project.makeDotEnv();
 		else if (str.check("s", "save") || str.check("local", "local")) {
 			project.makeJar(); project.clean(); project.copyJar(false);
@@ -40,7 +39,7 @@ public class Main {
 		} else if (str.check("o", "init")) {
 			if (args.length < 2) project.init(null);
 			project.init(args[1]);
-		}
+		} else { System.out.println(DefaultFile.getSomeHelp()); }
 	}
 
 	// @TODO remove this hall of shame
