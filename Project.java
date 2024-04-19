@@ -116,9 +116,35 @@ public class Project {
 		}
 	}
 	public void makeJar() {
-		List<String> fully = List.of(new File("libs").list());
-		if (fully.size() == 0) fully = List.of(new File("local-libs").list());
-		if (fully.size() == 0) fully = List.of();
+		// validate that src has been compiled with same count of file as target
+		// if is make save old jar to backup.jar
+		// @FIXME this is not good way of doing this
+		var src_total = FileControl
+			.returnIfEndsWith("src", new File("src").list(), ".java", "libs")
+			.split("\n").length;
+		var target_total = FileControl
+			.returnIfEndsWith("target", new File("target").list(), ".class", "libs")
+			.split("\n").length;
+		if (src_total > target_total) {
+			System.out.println("Something went wrong count of files inside src are more then target");
+			System.out.println("that means some of the file could possibly didn't compile correctly");
+			System.out.println("that is why there will be made backup for this");
+			FileControl.copy(Toml.Info.name+".jar", Toml.Info.name+".oldjar");
+		}
+
+		
+		List<String> fully = List.of();
+		try {
+			fully = List.of(new File("libs").list());
+		} catch (Exception e) {
+			Simple.err(e, "WARNING didn't find libs in libs folder could be because it doesn't exist if is that the case ignore this message");
+		}
+		try {
+			if (fully.size() > 0) fully.addAll(List.of(new File("local-libs").list()));
+			else fully = List.of(new File("local-libs").list());
+		} catch (Exception e) {
+			Simple.err(e, "WARNING didn't find libs in local-libs folder could be because it doesn't exist if is that the case ignore this message");
+		}
 		OwlControl.compileCmds(fully);
 		OwlControl.buildArchive(fully.toArray(new String[0]), Toml.Info.name+".jar");
 	}
@@ -220,18 +246,16 @@ public class Project {
 			System.out.println("Appending package from: " + "./src/"+Toml.Info.dirGroup()+s.substring(1)+" to "+s);
 			var groupStr = "package "+Toml.Info.group+group_ext;
 			String content = FileControl.read(s);
-			var needsPackage = false;
 
 			// @CHECK if there is already package defined then append root group
 			if (content.contains(";")) {
 				var firstLine = content.substring(0, content.indexOf(";"));
 				if (firstLine.contains("package")) {
-					groupStr += "."+content.substring(content.indexOf("package "), content.indexOf(";"));
-					content = content.substring(content.indexOf(";"));
-				} else { needsPackage = true; }
+					// groupStr += "."+content.substring(content.indexOf("package ")+8, content.indexOf(";")).trim();
+					content = content.substring(content.indexOf(";")+1);
+				}
 			}
-			if (needsPackage)
-				Simple.w("./src/"+Toml.Info.dirGroup()+s.substring(1), (groupStr+";\n\n"+content).getBytes());
+			Simple.w("./src/"+Toml.Info.dirGroup()+s.substring(1), (groupStr+";\n\n"+content).getBytes());
 			return null;
 		});
 	}
@@ -301,10 +325,21 @@ public class Project {
 	}
 	public String getLibs(String end) {
 		String libs_e = null;
-		libs_e = Stream.concat(
-			List.of(new File("libs").list()).stream().map(s -> "libs/"+s), 
-			List.of(new File("local-libs").list()).stream().map(s -> "local-libs/"+s)
-		).collect(Collectors.joining(":"));
+		try {
+			libs_e = List.of(new File("libs").list()).stream()
+				.map(s -> "libs/"+s).collect(Collectors.joining(":"));
+		} catch (Exception e) { Simple.err(e, "WARNING failed to list libs from libs folder if you don't have any ignore this message"); }
+		try {
+			var list = List.of(new File("local-libs").list()).stream()
+				.map(s -> "local-libs/"+s).collect(Collectors.joining(":"));
+			if (libs_e == null) libs_e = list;
+			else libs_e += ":"+list;
+		} catch (Exception e) { Simple.err(e, "WARNING failed to list local-libs from libs folder if you don't have any ignore this message"); }
+		
+//		libs_e = Stream.concat(
+//			List.of(new File("libs").list()).stream().map(s -> "libs/"+s), 
+//			List.of(new File("local-libs").list()).stream().map(s -> "local-libs/"+s)
+//		).collect(Collectors.joining(":"));
 		return libs_e == null ? "-cp "+end : "-cp "+libs_e+":"+end;
 	}
 	public void compile(String to, boolean deleteSrc) {

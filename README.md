@@ -1,5 +1,10 @@
 # JiFra
-Basic Java Project Manager CLI
+- Basic Java Project Manager CLI
+
+### Jifra is Acronym of 
+```
+Just Invoke Frustration, Receive Amusement
+```
 
 ## Commands
 ```js
